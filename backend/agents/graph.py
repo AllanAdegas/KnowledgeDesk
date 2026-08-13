@@ -19,6 +19,7 @@ language understanding when the local model cooperates — Paranoia
 Pragmática: never trust the local LLM's structured output blindly.
 """
 
+import difflib
 import json
 import re
 from dataclasses import dataclass
@@ -160,6 +161,49 @@ async def classify_task_hybrid(task: str, ollama_client: OllamaClient) -> Classi
         return ClassificationResult(category=classify_task(task), target_hint=None)
 
 
+def resolve_target_document(
+    target_hint: str | None, documents: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Resolve a free-text document reference against the indexed documents.
+
+    Matches `target_hint` against each document's `filename` via
+    case-insensitive substring matching (in both directions) and, failing
+    that, fuzzy matching (`difflib.get_close_matches`) to tolerate typos.
+
+    Args:
+        target_hint: Free text extracted by the LLM (e.g. "contrato da Acme").
+        documents: Indexed documents, each with at least an `id`/`filename`.
+
+    Returns:
+        The single matching document dict, or `None` if there's no match
+        or more than one plausible match (degrades safely rather than
+        guessing).
+    """
+    if not target_hint or not documents:
+        return None
+
+    hint = target_hint.strip().lower()
+    if not hint:
+        return None
+
+    substring_matches = [
+        doc
+        for doc in documents
+        if hint in doc["filename"].lower() or doc["filename"].lower() in hint
+    ]
+    if len(substring_matches) == 1:
+        return substring_matches[0]
+    if len(substring_matches) > 1:
+        return None
+
+    filenames = [doc["filename"] for doc in documents]
+    close_matches = difflib.get_close_matches(target_hint, filenames, n=2, cutoff=0.6)
+    if len(close_matches) == 1:
+        return next(doc for doc in documents if doc["filename"] == close_matches[0])
+
+    return None
+
+
 def _format_doc_list(docs: list[dict[str, Any]]) -> str:
     if not docs:
         return "Nenhum documento indexado no momento."
@@ -181,8 +225,6 @@ def make_clarify_node(ollama_client: OllamaClient):
     async def clarify_node(state: AgentState) -> AgentState:
         classification = await classify_task_hybrid(state["task"], ollama_client)
         state["task_category"] = classification.category
-        # Target-document resolution (using classification.target_hint) is
-        # wired in separately — see resolve_target_document.
         state["target_document_id"] = None
         state["target_filename"] = None
 
@@ -193,6 +235,21 @@ def make_clarify_node(ollama_client: OllamaClient):
                 "ação específica você quer? (ex: 'liste documentos sobre RH' ou "
                 "'resuma o documento X')"
             )
+            return state
+
+        if classification.target_hint:
+            documents = list_docs()
+            resolved = resolve_target_document(classification.target_hint, documents)
+            if resolved is not None:
+                state["target_document_id"] = resolved["id"]
+                state["target_filename"] = resolved["filename"]
+            else:
+                state["status"] = "needs_clarification"
+                state["result"] = (
+                    f"Não encontrei nenhum documento indexado correspondente a "
+                    f"'{classification.target_hint}'. " + _format_doc_list(documents)
+                )
+                return state
 
         return state
 
@@ -231,7 +288,11 @@ def make_execute_tools_node(ollama_client: OllamaClient):
             state["result"] = _format_doc_list(docs)
             state["status"] = "done"
         elif category == "summarize":
-            chunks = await search_docs(state["task"], ollama_client=ollama_client)
+            chunks = await search_docs(
+                state["task"],
+                ollama_client=ollama_client,
+                filename=state.get("target_filename"),
+            )
             if not chunks:
                 state["status"] = "pending"
             else:

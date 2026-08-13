@@ -33,6 +33,7 @@ async def retrieve(
     k: int | None = None,
     score_threshold: float | None = None,
     ollama_client: OllamaClient | None = None,
+    filename: str | None = None,
 ) -> list[RetrievedChunk]:
     """Return the top-k chunks most relevant to `query`, above the score threshold.
 
@@ -42,6 +43,11 @@ async def retrieve(
         score_threshold: Minimum similarity score to keep a result (defaults
             to `settings.rag_score_threshold`).
         ollama_client: Optional injected client, primarily for tests.
+        filename: Optional filename filter — when set, only chunks whose
+            `filename` metadata matches exactly are considered (used by the
+            agent when a natural-language task resolves to a specific
+            indexed document). When omitted, behaves exactly like before,
+            searching the whole corpus.
 
     Returns:
         A list of `RetrievedChunk`, sorted by descending score. Empty if no
@@ -56,7 +62,10 @@ async def retrieve(
         return []
 
     query_embedding = await ollama.embed(query)
-    results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
+    query_kwargs: dict[str, Any] = {"query_embeddings": [query_embedding], "n_results": top_k}
+    if filename:
+        query_kwargs["where"] = {"filename": filename}
+    results = collection.query(**query_kwargs)
 
     documents = (results.get("documents") or [[]])[0]
     metadatas = (results.get("metadatas") or [[]])[0]
