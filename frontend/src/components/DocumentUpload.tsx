@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { IndexedDocument } from '../types'
+import { AlertCircleIcon, CheckCircleIcon, FileIcon, UploadCloudIcon } from './icons'
 
 interface DocumentUploadProps {
   documents: IndexedDocument[]
@@ -21,7 +22,7 @@ export function DocumentUpload({ documents, isUploading, error, onUpload }: Docu
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div
         data-testid="upload-zone"
         role="button"
@@ -40,8 +41,10 @@ export function DocumentUpload({ documents, isUploading, error, onUpload }: Docu
           setIsDragging(false)
           handleFiles(event.dataTransfer.files)
         }}
-        className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-          isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+        className={`group flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+          isDragging
+            ? 'border-indigo-400 bg-indigo-500/10'
+            : 'border-white/15 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.04]'
         }`}
       >
         <input
@@ -51,38 +54,58 @@ export function DocumentUpload({ documents, isUploading, error, onUpload }: Docu
           className="hidden"
           onChange={(event) => handleFiles(event.target.files)}
         />
-        <p className="text-gray-600">
-          {isUploading ? 'Enviando e indexando…' : 'Arraste um arquivo ou clique para selecionar (PDF, DOCX, TXT)'}
+        <div
+          className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-colors ${
+            isDragging ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-slate-400 group-hover:text-slate-300'
+          }`}
+        >
+          <UploadCloudIcon className="h-6 w-6" />
+        </div>
+        <p className="text-sm font-medium text-slate-300">
+          {isUploading ? 'Enviando e indexando…' : 'Arraste um arquivo ou clique para selecionar'}
         </p>
+        <p className="text-xs text-slate-600">PDF, DOCX ou TXT</p>
       </div>
 
       {error && (
-        <p data-testid="upload-error" className="text-sm text-red-600">
+        <p
+          data-testid="upload-error"
+          className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+        >
+          <AlertCircleIcon className="h-4 w-4 shrink-0" />
           {error}
         </p>
       )}
 
-      <ul className="flex flex-col gap-2">
-        {documents.map((document) => (
-          <li
-            key={document.id}
-            data-testid="document-item"
-            className="flex items-center justify-between rounded border border-gray-200 px-3 py-2"
-          >
-            <span>{document.filename}</span>
-            <span
-              data-testid="document-badge"
-              className={`rounded px-2 py-0.5 text-xs ${
-                document.status === 'error'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-green-100 text-green-700'
-              }`}
+      {documents.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {documents.map((document) => (
+            <li
+              key={document.id}
+              data-testid="document-item"
+              className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5"
             >
-              {document.status === 'error' ? 'erro' : 'indexado'}
-            </span>
-          </li>
-        ))}
-      </ul>
+              <FileIcon className="h-4 w-4 shrink-0 text-slate-500" />
+              <span className="flex-1 truncate text-sm text-slate-200">{document.filename}</span>
+              <span
+                data-testid="document-badge"
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                  document.status === 'error'
+                    ? 'bg-red-500/15 text-red-300'
+                    : 'bg-emerald-500/15 text-emerald-300'
+                }`}
+              >
+                {document.status === 'error' ? (
+                  <AlertCircleIcon className="h-3 w-3" />
+                ) : (
+                  <CheckCircleIcon className="h-3 w-3" />
+                )}
+                {document.status === 'error' ? 'erro' : 'indexado'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
