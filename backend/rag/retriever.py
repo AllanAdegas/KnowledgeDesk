@@ -5,7 +5,7 @@ from typing import Any
 
 from core.config import settings
 from core.ollama_client import OllamaClient
-from core.ollama_client import client as default_ollama_client
+from core import ollama_client as ollama_client_module
 from rag.ingestion import get_chroma_collection
 
 
@@ -47,7 +47,7 @@ async def retrieve(
         A list of `RetrievedChunk`, sorted by descending score. Empty if no
         chunk clears the threshold (including when the collection is empty).
     """
-    ollama = ollama_client or default_ollama_client
+    ollama = ollama_client or ollama_client_module.client
     top_k = k or settings.rag_top_k
     threshold = score_threshold if score_threshold is not None else settings.rag_score_threshold
 

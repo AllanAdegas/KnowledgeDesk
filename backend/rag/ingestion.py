@@ -19,7 +19,7 @@ from pypdf import PdfReader
 
 from core.config import settings
 from core.ollama_client import OllamaClient
-from core.ollama_client import client as default_ollama_client
+from core import ollama_client as ollama_client_module
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 COLLECTION_NAME = "documents"
@@ -94,7 +94,7 @@ async def ingest_document(
         DocumentExtractionError: If no text could be extracted (corrupted file
             or empty content).
     """
-    ollama = ollama_client or default_ollama_client
+    ollama = ollama_client or ollama_client_module.client
     path = Path(file_path)
     extension = Path(filename).suffix.lower()
 
