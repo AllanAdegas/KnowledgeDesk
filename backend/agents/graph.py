@@ -1,20 +1,27 @@
 """LangGraph state machine for agentic task execution.
 
-Flow: [START] -> clarify? -> plan -> execute_tools -> respond -> [END],
+Flow: [START] -> clarify -> plan -> execute_tools -> respond -> [END],
 looping back from execute_tools to plan (up to `settings.agent_max_iterations`
 times) whenever a tool call doesn't yet produce a usable result — this is
 how the "para após N iterações" behavior from specs/agent.spec.md is
 implemented.
 
 Task classification (which tool to use, whether it's ambiguous or
-destructive) is done with lightweight keyword heuristics rather than an LLM
-call: it needs to be deterministic so it can be exercised by fully-mocked
-tests, and the local models available (llama3.2/mistral) are not reliable
-enough at structured intent classification to be worth the extra latency
-here. The LLM (via OllamaClient) is still used for the actual generative
-work — summarization.
+destructive) is done with a **hybrid** strategy: the LLM (via `OllamaClient`,
+`stream=False`) is asked to return structured JSON
+(`{"category": ..., "target_hint": ...}`) first; if that response is
+missing, isn't valid JSON, or names a category outside the expected enum,
+classification falls back to the deterministic keyword heuristic in
+`classify_task()`. This keeps the system testable/deterministic (every
+automated test mocks `ollama_client.chat` and can exercise both the
+happy path and the fallback path) while giving the agent real natural
+language understanding when the local model cooperates — Paranoia
+Pragmática: never trust the local LLM's structured output blindly.
 """
 
+import json
+import re
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -30,6 +37,36 @@ DESTRUCTIVE_KEYWORDS = ("delete", "deletar", "apague", "apagar", "remova", "remo
 LIST_KEYWORDS = ("liste", "listar", "list")
 SUMMARIZE_KEYWORDS = ("resum",)
 
+VALID_CATEGORIES = {"destructive", "list", "summarize", "ambiguous"}
+
+_JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+_CLASSIFICATION_PROMPT_TEMPLATE = (
+    "Classifique a tarefa do usuário em exatamente uma destas categorias:\n"
+    "- destructive: pede para apagar/deletar/remover documentos\n"
+    "- list: pede para listar/mostrar os documentos indexados\n"
+    "- summarize: pede um resumo ou os pontos principais de um documento\n"
+    "- ambiguous: não se encaixa claramente em nenhuma das anteriores\n\n"
+    "Se a tarefa mencionar um documento específico (por nome, assunto ou "
+    "apelido), extraia esse trecho livre em 'target_hint'; caso contrário "
+    "'target_hint' deve ser null.\n\n"
+    "Responda APENAS com um JSON no formato exato, sem texto adicional:\n"
+    '{{"category": "<categoria>", "target_hint": "<trecho ou null>"}}\n\n'
+    "Tarefa: {task}"
+)
+
+
+class ClassificationError(Exception):
+    """Raised internally when the LLM's classification can't be trusted."""
+
+
+@dataclass(frozen=True)
+class ClassificationResult:
+    """Result of classifying a task, whether from the LLM or the fallback."""
+
+    category: str
+    target_hint: str | None = None
+
 
 class AgentState(TypedDict):
     """State threaded through every node of the agent graph."""
@@ -40,10 +77,17 @@ class AgentState(TypedDict):
     iterations: int
     result: str | None
     status: str
+    task_category: str
+    target_document_id: str | None
+    target_filename: str | None
 
 
 def classify_task(task: str) -> str:
-    """Classify a task into one of: destructive, list, summarize, ambiguous."""
+    """Classify a task into one of: destructive, list, summarize, ambiguous.
+
+    Deterministic keyword heuristic — used directly by tests, and as the
+    fallback for `classify_task_llm` when the LLM's output can't be trusted.
+    """
     lowered = task.lower()
     if any(keyword in lowered for keyword in DESTRUCTIVE_KEYWORDS):
         return "destructive"
@@ -54,6 +98,68 @@ def classify_task(task: str) -> str:
     return "ambiguous"
 
 
+async def classify_task_llm(task: str, ollama_client: OllamaClient) -> ClassificationResult:
+    """Classify a task using the LLM, asking for structured JSON output.
+
+    Args:
+        task: The natural-language task description.
+        ollama_client: The client to call (`stream=False`, single-shot).
+
+    Returns:
+        A `ClassificationResult` with a valid category and optional
+        `target_hint` (the free-text document reference, if any).
+
+    Raises:
+        ClassificationError: If the LLM's response is missing, not valid
+            JSON, or names a category outside the expected enum. Callers
+            are expected to catch this and fall back to `classify_task`.
+    """
+    prompt = _CLASSIFICATION_PROMPT_TEMPLATE.format(task=task)
+    tokens = [
+        token
+        async for token in ollama_client.chat([{"role": "user", "content": prompt}], stream=False)
+    ]
+    raw = "".join(tokens).strip()
+
+    match = _JSON_BLOCK_RE.search(raw)
+    if not match:
+        raise ClassificationError(f"No JSON object found in LLM response: {raw!r}")
+
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise ClassificationError(f"Malformed JSON from LLM: {raw!r}") from exc
+
+    if not isinstance(parsed, dict):
+        raise ClassificationError(f"LLM JSON was not an object: {raw!r}")
+
+    category = parsed.get("category")
+    if category not in VALID_CATEGORIES:
+        raise ClassificationError(f"Invalid category from LLM: {category!r}")
+
+    target_hint = parsed.get("target_hint")
+    if not isinstance(target_hint, str) or not target_hint.strip():
+        target_hint = None
+
+    return ClassificationResult(category=category, target_hint=target_hint)
+
+
+async def classify_task_hybrid(task: str, ollama_client: OllamaClient) -> ClassificationResult:
+    """Classify a task via the LLM, falling back to the keyword heuristic.
+
+    This is the single entry point the graph uses: it tries
+    `classify_task_llm` first and, on any failure (bad/missing JSON,
+    invalid category, or the underlying call raising for any reason —
+    e.g. the LLM being unreachable), degrades to `classify_task` with no
+    target hint, matching this project's "never trust the local LLM
+    blindly" policy.
+    """
+    try:
+        return await classify_task_llm(task, ollama_client)
+    except Exception:  # noqa: BLE001 - any failure degrades to the deterministic fallback
+        return ClassificationResult(category=classify_task(task), target_hint=None)
+
+
 def _format_doc_list(docs: list[dict[str, Any]]) -> str:
     if not docs:
         return "Nenhum documento indexado no momento."
@@ -61,16 +167,36 @@ def _format_doc_list(docs: list[dict[str, Any]]) -> str:
     return "Documentos disponíveis:\n" + "\n".join(lines)
 
 
-async def clarify_node(state: AgentState) -> AgentState:
-    """Ask for clarification up front if the task doesn't map to a known action."""
-    if classify_task(state["task"]) == "ambiguous":
-        state["status"] = "needs_clarification"
-        state["result"] = (
-            "Sua tarefa não ficou clara. Pode detalhar quais documentos ou qual "
-            "ação específica você quer? (ex: 'liste documentos sobre RH' ou "
-            "'resuma o documento X')"
-        )
-    return state
+def make_clarify_node(ollama_client: OllamaClient):
+    """Build the clarify node, closing over the OllamaClient used to classify.
+
+    Runs the hybrid classification exactly once per task and stores the
+    result in `AgentState` (`task_category`, `target_document_id`,
+    `target_filename`) so `plan_node` doesn't need to reclassify on every
+    loop iteration. Asks for clarification up front when the task is
+    ambiguous, or when it names a target document that can't be resolved
+    against the indexed documents.
+    """
+
+    async def clarify_node(state: AgentState) -> AgentState:
+        classification = await classify_task_hybrid(state["task"], ollama_client)
+        state["task_category"] = classification.category
+        # Target-document resolution (using classification.target_hint) is
+        # wired in separately — see resolve_target_document.
+        state["target_document_id"] = None
+        state["target_filename"] = None
+
+        if classification.category == "ambiguous":
+            state["status"] = "needs_clarification"
+            state["result"] = (
+                "Sua tarefa não ficou clara. Pode detalhar quais documentos ou qual "
+                "ação específica você quer? (ex: 'liste documentos sobre RH' ou "
+                "'resuma o documento X')"
+            )
+
+        return state
+
+    return clarify_node
 
 
 def route_after_clarify(state: AgentState) -> str:
@@ -78,9 +204,12 @@ def route_after_clarify(state: AgentState) -> str:
 
 
 async def plan_node(state: AgentState) -> AgentState:
-    """Pick which tool to use for this task/iteration."""
-    category = classify_task(state["task"])
-    state["tool_calls"].append({"tool": category})
+    """Pick which tool to use for this task/iteration.
+
+    Classification already happened once in `clarify_node`; this just
+    reads the decision instead of reclassifying on every loop iteration.
+    """
+    state["tool_calls"].append({"tool": state["task_category"]})
     return state
 
 
@@ -145,7 +274,7 @@ def build_agent_graph(ollama_client: OllamaClient | None = None) -> Any:
     client = ollama_client or ollama_client_module.client
     graph = StateGraph(AgentState)
 
-    graph.add_node("clarify", clarify_node)
+    graph.add_node("clarify", make_clarify_node(client))
     graph.add_node("plan", plan_node)
     graph.add_node("execute_tools", make_execute_tools_node(client))
     graph.add_node("respond", respond_node)
@@ -173,6 +302,9 @@ async def run_agent_task(task: str, ollama_client: OllamaClient | None = None) -
         "iterations": 0,
         "result": None,
         "status": "pending",
+        "task_category": "",
+        "target_document_id": None,
+        "target_filename": None,
     }
 
     final_state: AgentState = await compiled_graph.ainvoke(initial_state)
