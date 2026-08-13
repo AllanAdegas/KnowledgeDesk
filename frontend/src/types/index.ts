@@ -12,6 +12,7 @@ export interface IndexedDocument {
   filename: string
   chunks_count: number
   status?: 'indexed' | 'error'
+  summary?: string
 }
 
 export type AgentTaskStatus =

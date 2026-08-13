@@ -86,10 +86,20 @@ export function DocumentUpload({ documents, isUploading, error, onUpload }: Docu
               className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5"
             >
               <FileIcon className="h-4 w-4 shrink-0 text-slate-500" />
-              <span className="flex-1 truncate text-sm text-slate-200">{document.filename}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-sm text-slate-200">{document.filename}</span>
+                {document.summary && (
+                  <p
+                    data-testid="document-summary"
+                    className="line-clamp-2 text-xs text-slate-500"
+                  >
+                    {document.summary}
+                  </p>
+                )}
+              </div>
               <span
                 data-testid="document-badge"
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                   document.status === 'error'
                     ? 'bg-red-500/15 text-red-300'
                     : 'bg-emerald-500/15 text-emerald-300'

@@ -54,6 +54,36 @@ describe('DocumentUpload', () => {
     expect(screen.getByTestId('document-badge')).toHaveTextContent('indexado')
   })
 
+  it('shows the document summary when present', () => {
+    const documents: IndexedDocument[] = [
+      {
+        id: '1',
+        filename: 'policy.pdf',
+        chunks_count: 4,
+        status: 'indexed',
+        summary: 'Política de trabalho remoto: duas vezes por semana no escritório.',
+      },
+    ]
+
+    render(
+      <DocumentUpload documents={documents} isUploading={false} error={null} onUpload={vi.fn()} />,
+    )
+
+    expect(screen.getByTestId('document-summary')).toHaveTextContent('Política de trabalho remoto')
+  })
+
+  it('does not render a summary element when the document has no summary', () => {
+    const documents: IndexedDocument[] = [
+      { id: '1', filename: 'policy.pdf', chunks_count: 4, status: 'indexed' },
+    ]
+
+    render(
+      <DocumentUpload documents={documents} isUploading={false} error={null} onUpload={vi.fn()} />,
+    )
+
+    expect(screen.queryByTestId('document-summary')).not.toBeInTheDocument()
+  })
+
   it('shows an "enviando" label while uploading', () => {
     render(<DocumentUpload documents={[]} isUploading={true} error={null} onUpload={vi.fn()} />)
 
