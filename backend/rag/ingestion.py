@@ -33,7 +33,7 @@ class DocumentExtractionError(ValueError):
     """Raised when text could not be extracted from an otherwise supported file."""
 
 
-def _get_chroma_collection() -> Collection:
+def get_chroma_collection() -> Collection:
     """Return the (persisted) Chroma collection used to store document chunks."""
     chroma_client = chromadb.PersistentClient(path=settings.chroma_persist_dir)
     return chroma_client.get_or_create_collection(name=COLLECTION_NAME)
@@ -120,7 +120,7 @@ async def ingest_document(
         for index in range(len(chunks))
     ]
 
-    collection = _get_chroma_collection()
+    collection = get_chroma_collection()
     collection.add(
         ids=ids,
         embeddings=embeddings,
