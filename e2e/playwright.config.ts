@@ -11,6 +11,10 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './tests',
+  // Real local LLM calls (llama3.2 on CPU) run well past Playwright's 30s
+  // default, especially the agent's multi-step LangGraph flow (clarify ->
+  // plan -> execute_tools -> respond can mean several sequential inferences).
+  timeout: 180_000,
   fullyParallel: false,
   retries: 0,
   workers: 1,

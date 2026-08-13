@@ -24,6 +24,11 @@ export function useAgent(): UseAgentResult {
   const isMountedRef = useRef(true)
 
   useEffect(() => {
+    // Reset on every (re)mount, not just at ref-init: React 18 StrictMode's
+    // dev-mode mount -> cleanup -> remount cycle would otherwise leave this
+    // stuck at false after the simulated unmount, silently dropping every
+    // subsequent setResult/setIsRunning call in runTask.
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
     }
