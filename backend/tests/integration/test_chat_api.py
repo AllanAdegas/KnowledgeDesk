@@ -3,10 +3,18 @@ the mock_ollama fixture; SQLite is isolated per test (autouse fixture).
 """
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+
+from core.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _isolated_chroma(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "chroma_persist_dir", str(tmp_path / "chroma"))
 
 
 def _stream_of(tokens: list[str]) -> AsyncGenerator[str, None]:
@@ -87,3 +95,24 @@ async def test_history_window_limited_to_10_turns(
     assert len(windowed) == 10
     # 12 messages total, most recent 10 -> the oldest 2 (pergunta 0, resposta 0) drop off.
     assert windowed[0]["content"] == "pergunta 1"
+
+
+@pytest.mark.asyncio
+async def test_message_with_rag_enabled_cites_source(
+    api_client: AsyncClient, mock_ollama: AsyncMock
+) -> None:
+    files = {"file": ("policy.txt", b"remote work policy details " * 30, "text/plain")}
+    await api_client.post("/api/documents/upload", files=files)
+
+    mock_ollama.chat.return_value = _stream_of(["a resposta baseada no documento"])
+    session_response = await api_client.post("/api/chat/session")
+    session_id = session_response.json()["session_id"]
+
+    response = await api_client.post(
+        "/api/chat/message",
+        json={"session_id": session_id, "message": "qual a política?", "rag_enabled": True},
+    )
+
+    assert response.status_code == 200
+    assert "policy.txt" in response.text
+    assert '"type": "done"' in response.text
