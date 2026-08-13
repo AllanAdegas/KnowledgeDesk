@@ -13,7 +13,6 @@ from typing import TypedDict
 from sqlalchemy import DateTime, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column
 
-from core.config import settings
 from core.database import AsyncSessionEngine, Base, get_engine_holder
 
 
@@ -80,19 +79,21 @@ async def get_history(
 ) -> list[HistoryMessage]:
     """Return the most recent `limit` messages for a session, oldest first.
 
-    Defaults to `settings.max_history_turns` when `limit` is not given.
+    Pass `limit=None` to fetch the full history (e.g. the history route);
+    the sliding-window callers (chat streaming) pass an explicit limit —
+    typically `settings.max_history_turns`.
     """
     holder = engine_holder or get_engine_holder()
     await holder.init_models()
-    window = limit if limit is not None else settings.max_history_turns
 
     async with holder.session_factory() as db_session:
         statement = (
             select(ChatMessageModel)
             .where(ChatMessageModel.session_id == session_id)
             .order_by(ChatMessageModel.id.desc())
-            .limit(window)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
         result = await db_session.execute(statement)
         rows = list(result.scalars().all())
 
