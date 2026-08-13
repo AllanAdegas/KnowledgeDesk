@@ -35,6 +35,21 @@ async def test_upload_pdf_returns_indexed_status(
 
 
 @pytest.mark.asyncio
+async def test_upload_response_includes_summary(
+    api_client: AsyncClient, mock_ollama: AsyncMock
+) -> None:
+    mock_ollama.embed.return_value = [0.1] * 768
+    files = {"file": ("notes.txt", b"word " * 300, "text/plain")}
+
+    response = await api_client.post("/api/documents/upload", files=files)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "summary" in body
+    assert body["summary"]
+
+
+@pytest.mark.asyncio
 async def test_upload_invalid_format_returns_422(api_client: AsyncClient) -> None:
     files = {"file": ("virus.exe", b"binary content", "application/octet-stream")}
 
@@ -95,6 +110,22 @@ async def test_list_documents_returns_uploaded_files(
     assert response.status_code == 200
     body = response.json()
     assert any(doc["filename"] == "report.txt" for doc in body)
+
+
+@pytest.mark.asyncio
+async def test_list_documents_includes_summary(
+    api_client: AsyncClient, mock_ollama: AsyncMock
+) -> None:
+    mock_ollama.embed.return_value = [0.1] * 768
+    files = {"file": ("report.txt", b"quarterly numbers " * 50, "text/plain")}
+    await api_client.post("/api/documents/upload", files=files)
+
+    response = await api_client.get("/api/documents")
+
+    assert response.status_code == 200
+    body = response.json()
+    document = next(doc for doc in body if doc["filename"] == "report.txt")
+    assert document["summary"]
 
 
 @pytest.mark.asyncio
