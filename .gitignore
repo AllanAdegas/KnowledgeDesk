@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Backend data (SQLite DB, ChromaDB persisted store, uploaded files)
+backend/data/*
+!backend/data/.gitkeep
+
+# Env files
+.env
+*.env.local
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/coverage/
+.vite/
+
+# Playwright / e2e
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

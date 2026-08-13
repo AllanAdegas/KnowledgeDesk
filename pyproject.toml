@@ -1,0 +1,14 @@
+[project]
+name = "knowledgedesk"
+version = "0.1.0"
+description = "KnowledgeDesk — local-first internal knowledge assistant (RAG + chatbot + agent) powered by Ollama"
+requires-python = ">=3.11"
+dependencies = []
+
+# The actual installable backend lives in ./backend (its own pyproject.toml /
+# uv-managed virtualenv). This root file exists only to mark the repository
+# root for tooling and to document the umbrella project metadata; run
+# `cd backend && uv sync` to install the backend's dependencies.
+
+[tool.uv]
+package = false
