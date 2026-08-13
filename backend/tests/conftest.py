@@ -5,6 +5,7 @@ perform a real network call to a running Ollama server, per project policy.
 """
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -47,3 +48,19 @@ async def api_client(mock_ollama: AsyncMock) -> AsyncGenerator[AsyncClient, None
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def isolated_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the SQLite database at a fresh per-test file.
+
+    `core.database` builds its engine/sessionmaker once at import time, so we
+    rebuild the module-level holder here rather than relying on the
+    `settings.database_url` value alone (which the already-built engine
+    would never re-read).
+    """
+    import core.database as database_module
+
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(database_module.settings, "database_url", f"sqlite+aiosqlite:///{db_path}")
+    monkeypatch.setattr(database_module, "_engine_holder", database_module.AsyncSessionEngine())
