@@ -61,6 +61,27 @@ why SSE instead of WebSockets, how the LangGraph state machine is shaped).
 
 ## Como rodar
 
+### Com Docker (recomendado)
+
+Um único comando sobe tudo — Ollama incluso — sem precisar instalar nada
+além do Docker:
+
+```bash
+docker compose up --build
+```
+
+Na primeira subida, o serviço `ollama-pull` baixa automaticamente os
+modelos `llama3.2` e `nomic-embed-text` para dentro do container `ollama`
+(chamadas seguintes são idempotentes, não rebaixam o que já existe). O
+`backend` só sobe depois que os modelos terminam de baixar, e o `frontend`
+só depois que o `backend` está saudável. Acesse em
+[http://localhost:5173](http://localhost:5173) quando os containers
+ficarem saudáveis (`docker compose ps`).
+
+### Rodando sem Docker
+
+Para quem já tem o Ollama instalado localmente e quer iterar mais rápido:
+
 ```bash
 # 1. Instale os modelos necessários no Ollama (uma vez)
 ollama pull llama3.2 && ollama pull nomic-embed-text
@@ -74,9 +95,6 @@ cd frontend && npm install && cp .env.example .env && npm run dev
 # 4. Acesse
 open http://localhost:5173
 ```
-
-Alternativamente, com Docker: `docker compose up` (requer Ollama rodando no
-host — veja `OLLAMA_BASE_URL` em `docker-compose.yml`).
 
 ## Metodologia
 
