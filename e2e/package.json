@@ -1,0 +1,15 @@
+{
+  "name": "knowledgedesk-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright end-to-end tests for KnowledgeDesk. Requires the backend + frontend running locally, Ollama running, and the llama3.2/nomic-embed-text models pulled — see the root README's 'E2E tests' section.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
+  }
+}
