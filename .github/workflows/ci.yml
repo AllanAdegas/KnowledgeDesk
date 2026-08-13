@@ -1,0 +1,26 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: cd backend && uv sync
+      - name: Run tests
+        run: cd backend && uv run pytest --cov=. --cov-report=xml -v
+      - name: Coverage check
+        run: cd backend && uv run coverage report --fail-under=80
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run test:coverage
+      - run: cd frontend && npm run build

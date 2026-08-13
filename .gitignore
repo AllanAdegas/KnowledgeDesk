@@ -33,3 +33,4 @@ e2e/.cache/
 .idea/
 .vscode/
 *.swp
+coverage.xml
