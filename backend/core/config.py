@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     rag_score_threshold: float = 0.3
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
+    # Safe upper bound on how much extracted text is sent to the LLM when
+    # generating the post-indexing summary, so a large document can't blow
+    # past the local model's context window.
+    rag_summary_max_chars: int = 6000
 
     # Agent
     agent_max_iterations: int = 5

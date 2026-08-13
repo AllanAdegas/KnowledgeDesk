@@ -24,7 +24,11 @@ async def _async_generator(chunks: list[str]) -> AsyncGenerator[str, None]:
 def mock_ollama(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     """Replace the module-level Ollama singleton with a fully mocked client."""
     mock = AsyncMock(spec=OllamaClient)
-    mock.chat.return_value = _async_generator(["Olá", " mundo", "!"])
+    # `side_effect` (not `return_value`) so a fresh generator is built on
+    # every call: a single test can trigger chat() more than once (e.g. an
+    # upload's post-indexing summary, then a chat/agent call), and a
+    # `return_value` generator instance would be exhausted after the first.
+    mock.chat.side_effect = lambda *args, **kwargs: _async_generator(["Olá", " mundo", "!"])
     mock.embed.return_value = [0.1] * 768
     mock.list_models.return_value = ["llama3.2", "nomic-embed-text"]
 

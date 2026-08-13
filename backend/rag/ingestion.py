@@ -17,6 +17,7 @@ from docx import Document as DocxDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
+from agents.tools.summarize import summarize
 from core.config import settings
 from core.ollama_client import OllamaClient
 from core import ollama_client as ollama_client_module
@@ -106,6 +107,11 @@ async def ingest_document(
 
     text = _extract_text(path, extension)
 
+    # Truncate before summarizing (not before chunking/embedding — the full
+    # text is still indexed) so a large document can't blow past the local
+    # model's context window; see settings.rag_summary_max_chars.
+    summary = await summarize(text[: settings.rag_summary_max_chars], ollama_client=ollama)
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.rag_chunk_size,
         chunk_overlap=settings.rag_chunk_overlap,
@@ -116,7 +122,12 @@ async def ingest_document(
     embeddings = [await ollama.embed(chunk) for chunk in chunks]
     ids = [f"{document_id}-{index}" for index in range(len(chunks))]
     metadatas = [
-        {"filename": filename, "chunk_index": index, "document_id": document_id}
+        {
+            "filename": filename,
+            "chunk_index": index,
+            "document_id": document_id,
+            "summary": summary,
+        }
         for index in range(len(chunks))
     ]
 
@@ -133,6 +144,7 @@ async def ingest_document(
         "filename": filename,
         "chunks_count": len(chunks),
         "status": "indexed",
+        "summary": summary,
     }
 
 
@@ -143,7 +155,7 @@ def list_indexed_documents() -> list[dict[str, Any]]:
     both surfaces stay in sync with a single source of truth.
 
     Returns:
-        A list of `{"id": str, "filename": str, "chunks_count": int}`.
+        A list of `{"id": str, "filename": str, "chunks_count": int, "summary": str | None}`.
     """
     collection = get_chroma_collection()
     all_chunks = collection.get(include=["metadatas"])
@@ -159,6 +171,7 @@ def list_indexed_documents() -> list[dict[str, Any]]:
                 "id": document_id,
                 "filename": metadata.get("filename"),
                 "chunks_count": 0,
+                "summary": metadata.get("summary"),
             }
         documents[document_id]["chunks_count"] += 1
 

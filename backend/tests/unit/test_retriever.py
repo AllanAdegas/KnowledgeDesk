@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from core.config import settings
+from core.ollama_client import OllamaClient
 from rag.ingestion import ingest_document
 from rag.retriever import retrieve
 
@@ -20,8 +21,13 @@ def _isolated_chroma(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def fake_ollama() -> AsyncMock:
     """An Ollama mock that returns a fixed, distinguishable embedding per call."""
-    mock = AsyncMock()
+    mock = AsyncMock(spec=OllamaClient)
     mock.embed.return_value = [1.0] + [0.0] * 767
+
+    async def _summary_stream(*_args: object, **_kwargs: object):
+        yield "resumo de teste"
+
+    mock.chat.side_effect = lambda *args, **kwargs: _summary_stream()
     return mock
 
 

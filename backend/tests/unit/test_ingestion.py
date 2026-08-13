@@ -7,6 +7,7 @@ import pytest
 from pypdf import PdfWriter
 
 from core.config import settings
+from core.ollama_client import OllamaClient
 from rag.ingestion import DocumentExtractionError, UnsupportedFileTypeError, ingest_document
 
 
@@ -25,8 +26,13 @@ def _isolated_chroma(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def fake_ollama() -> AsyncMock:
-    mock = AsyncMock()
+    mock = AsyncMock(spec=OllamaClient)
     mock.embed.return_value = [0.1] * 768
+
+    async def _summary_stream(*_args: object, **_kwargs: object):
+        yield "resumo de teste"
+
+    mock.chat.side_effect = lambda *args, **kwargs: _summary_stream()
     return mock
 
 

@@ -35,7 +35,7 @@ async def test_create_session_returns_id(api_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_message_returns_sse_stream(api_client: AsyncClient, mock_ollama: AsyncMock) -> None:
-    mock_ollama.chat.return_value = _stream_of(["Olá", " mundo", "!"])
+    mock_ollama.chat.side_effect = lambda *args, **kwargs: _stream_of(["Olá", " mundo", "!"])
     session_response = await api_client.post("/api/chat/session")
     session_id = session_response.json()["session_id"]
 
@@ -54,7 +54,7 @@ async def test_message_returns_sse_stream(api_client: AsyncClient, mock_ollama: 
 async def test_history_persists_across_messages(
     api_client: AsyncClient, mock_ollama: AsyncMock
 ) -> None:
-    mock_ollama.chat.return_value = _stream_of(["resposta"])
+    mock_ollama.chat.side_effect = lambda *args, **kwargs: _stream_of(["resposta"])
     session_response = await api_client.post("/api/chat/session")
     session_id = session_response.json()["session_id"]
 
@@ -78,7 +78,7 @@ async def test_history_window_limited_to_10_turns(
     session_id = session_response.json()["session_id"]
 
     for i in range(6):
-        mock_ollama.chat.return_value = _stream_of([f"resposta {i}"])
+        mock_ollama.chat.side_effect = lambda *args, i=i, **kwargs: _stream_of([f"resposta {i}"])
         await api_client.post(
             "/api/chat/message", json={"session_id": session_id, "message": f"pergunta {i}"}
         )
@@ -104,7 +104,7 @@ async def test_message_with_rag_enabled_cites_source(
     files = {"file": ("policy.txt", b"remote work policy details " * 30, "text/plain")}
     await api_client.post("/api/documents/upload", files=files)
 
-    mock_ollama.chat.return_value = _stream_of(["a resposta baseada no documento"])
+    mock_ollama.chat.side_effect = lambda *args, **kwargs: _stream_of(["a resposta baseada no documento"])
     session_response = await api_client.post("/api/chat/session")
     session_id = session_response.json()["session_id"]
 
