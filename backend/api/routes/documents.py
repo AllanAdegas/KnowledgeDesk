@@ -13,6 +13,7 @@ from rag.ingestion import (
     UnsupportedFileTypeError,
     get_chroma_collection,
     ingest_document,
+    list_indexed_documents,
 )
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -65,24 +66,7 @@ async def list_documents() -> list[dict[str, Any]]:
     Returns:
         A list of `{"id": str, "filename": str, "chunks_count": int}`.
     """
-    collection = get_chroma_collection()
-    all_chunks = collection.get(include=["metadatas"])
-    metadatas = all_chunks.get("metadatas") or []
-
-    documents: dict[str, dict[str, Any]] = {}
-    for metadata in metadatas:
-        document_id = metadata.get("document_id")
-        if not document_id:
-            continue
-        if document_id not in documents:
-            documents[document_id] = {
-                "id": document_id,
-                "filename": metadata.get("filename"),
-                "chunks_count": 0,
-            }
-        documents[document_id]["chunks_count"] += 1
-
-    return list(documents.values())
+    return list_indexed_documents()
 
 
 @router.delete("/{document_id}")

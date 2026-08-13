@@ -134,3 +134,32 @@ async def ingest_document(
         "chunks_count": len(chunks),
         "status": "indexed",
     }
+
+
+def list_indexed_documents() -> list[dict[str, Any]]:
+    """Return one summary entry per indexed document (not per chunk).
+
+    Shared by the documents API route and the agent's `list_docs` tool, so
+    both surfaces stay in sync with a single source of truth.
+
+    Returns:
+        A list of `{"id": str, "filename": str, "chunks_count": int}`.
+    """
+    collection = get_chroma_collection()
+    all_chunks = collection.get(include=["metadatas"])
+    metadatas = all_chunks.get("metadatas") or []
+
+    documents: dict[str, dict[str, Any]] = {}
+    for metadata in metadatas:
+        document_id = metadata.get("document_id")
+        if not document_id:
+            continue
+        if document_id not in documents:
+            documents[document_id] = {
+                "id": document_id,
+                "filename": metadata.get("filename"),
+                "chunks_count": 0,
+            }
+        documents[document_id]["chunks_count"] += 1
+
+    return list(documents.values())

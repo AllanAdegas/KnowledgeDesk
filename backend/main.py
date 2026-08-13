@@ -8,7 +8,7 @@ Run locally with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, documents, rag
+from api.routes import agent, chat, documents, rag
 
 app = FastAPI(
     title="KnowledgeDesk API",
@@ -31,6 +31,7 @@ app.add_middleware(
 app.include_router(documents.router)
 app.include_router(rag.router)
 app.include_router(chat.router)
+app.include_router(agent.router)
 
 
 @app.get("/health")
