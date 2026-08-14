@@ -1,18 +1,6 @@
 # KnowledgeDesk
 
-## Demo
 
-> No GIF is included in this session — recording one requires a real Ollama
-> instance with `llama3.2` and `nomic-embed-text` pulled, neither of which is
-> available in this environment (only `qwen3` is installed). Once those
-> models are pulled and the app is running locally, record a GIF that shows:
->
-> 1. Dragging a PDF onto the upload zone and watching it flip to "indexado".
-> 2. Toggling RAG on in the chat sidebar.
-> 3. Asking a question about the uploaded document and watching the answer
->    stream in token by token, ending with a cited source.
->
-> Save it as `docs/demo.gif` and reference it here: `![demo](docs/demo.gif)`.
 
 ## O que é
 
