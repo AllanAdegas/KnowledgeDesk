@@ -20,9 +20,11 @@
 ### Resumo pós-indexação
 - DADO um documento indexado com sucesso
   QUANDO a ingestão termina
-  ENTÃO o sistema gera um resumo do texto completo extraído (reusando a
-        tool `summarize`, já existente) e o inclui na resposta do upload
-        como campo `summary`
+  ENTÃO o sistema gera um resumo do texto completo extraído, em um único
+        parágrafo de texto corrido (sem títulos/tópicos/marcadores — esse
+        formato estruturado é reservado para a tool `summarize` do agente,
+        não para este resumo de documento) e o inclui na resposta do
+        upload como campo `summary`
 
 - DADO um documento cujo texto extraído excede `rag_summary_max_chars`
       (6000 caracteres por padrão)

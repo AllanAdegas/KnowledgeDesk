@@ -17,13 +17,32 @@ from docx import Document as DocxDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
-from agents.tools.summarize import summarize
 from core.config import settings
 from core.ollama_client import OllamaClient
 from core import ollama_client as ollama_client_module
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 COLLECTION_NAME = "documents"
+
+# Deliberately separate from agents.tools.summarize: that one is prompted to
+# produce a topic/bullet-structured answer (right for a chat-style agent
+# response), while a document's post-indexing summary reads better as a
+# short, flowing paragraph — not a list of headings and bullets.
+_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
+    "Resuma o texto a seguir em português, em um único parágrafo corrido "
+    "(sem títulos, sem tópicos, sem marcadores), destacando as partes mais "
+    "importantes:\n\n{text}"
+)
+
+
+async def _generate_document_summary(text: str, ollama_client: OllamaClient) -> str:
+    """Generate a short prose summary of `text` for the document listing."""
+    prompt = _DOCUMENT_SUMMARY_PROMPT_TEMPLATE.format(text=text)
+    tokens = [
+        token
+        async for token in ollama_client.chat([{"role": "user", "content": prompt}], stream=True)
+    ]
+    return "".join(tokens)
 
 
 class UnsupportedFileTypeError(ValueError):
@@ -121,7 +140,7 @@ async def ingest_document(
     # Truncate before summarizing (not before chunking/embedding — the full
     # text is still indexed) so a large document can't blow past the local
     # model's context window; see settings.rag_summary_max_chars.
-    summary = await summarize(text[: settings.rag_summary_max_chars], ollama_client=ollama)
+    summary = await _generate_document_summary(text[: settings.rag_summary_max_chars], ollama)
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.rag_chunk_size,
