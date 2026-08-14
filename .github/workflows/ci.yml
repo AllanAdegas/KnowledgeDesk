@@ -20,7 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        # jsdom@30 (used by vitest's test environment) requires Node
+        # ^22.22.2 || ^24.15.0 || >=26.0.0 — Node 20 fails at import time
+        # with "webidl.util.markAsUncloneable is not a function".
+        with: { node-version: '24' }
       - run: cd frontend && npm ci
       - run: cd frontend && npm run test:coverage
       - run: cd frontend && npm run build
