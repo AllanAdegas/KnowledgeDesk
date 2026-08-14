@@ -35,9 +35,20 @@ class DocumentExtractionError(ValueError):
 
 
 def get_chroma_collection() -> Collection:
-    """Return the (persisted) Chroma collection used to store document chunks."""
+    """Return the (persisted) Chroma collection used to store document chunks.
+
+    Explicitly uses cosine distance rather than Chroma's default (squared L2):
+    embedding models like `nomic-embed-text` produce unnormalized vectors
+    where L2 distances routinely run into the hundreds, which collapses
+    `_distance_to_similarity`'s 0..1 output near zero and makes every result
+    fail `rag_score_threshold` in practice. Cosine distance is scale-invariant
+    and keeps scores meaningfully spread across 0..1 regardless of embedding
+    magnitude.
+    """
     chroma_client = chromadb.PersistentClient(path=settings.chroma_persist_dir)
-    return chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+    return chroma_client.get_or_create_collection(
+        name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+    )
 
 
 def _extract_text(file_path: Path, extension: str) -> str:

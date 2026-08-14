@@ -19,13 +19,15 @@ class RetrievedChunk:
 
 
 def _distance_to_similarity(distance: float) -> float:
-    """Convert a Chroma L2/cosine distance into a 0..1 similarity score.
+    """Convert a Chroma cosine distance into a 0..1 similarity score.
 
-    Chroma's default space returns a distance where 0 means identical.
-    We convert it into a similarity score via `1 / (1 + distance)` so it
-    behaves consistently for thresholding regardless of the exact metric.
+    The collection is created with `hnsw:space="cosine"` (see
+    `get_chroma_collection`), so `distance` is `1 - cosine_similarity`,
+    ranging 0 (identical) to 2 (opposite). Similarity is `1 - distance`,
+    clamped to 0 so unrelated/opposite vectors read as "no match" rather
+    than a negative score.
     """
-    return 1.0 / (1.0 + max(distance, 0.0))
+    return max(1.0 - distance, 0.0)
 
 
 async def retrieve(
